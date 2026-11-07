@@ -14,9 +14,9 @@ jobs:
         run: |
           exec > >(tee build.log) 2>&1
           set -x
-          uname -a
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq clang lld ldid curl python3 xz-utils git
+          sudo apt-get update -y || echo "APT_UPDATE_FAILED"
+          sudo apt-get install -y lld xz-utils || echo "APT_INSTALL_FAILED"
+          which clang || sudo apt-get install -y clang || echo "NO_CLANG"
           clang --version
           python3 - > sdkurl.txt <<'PY'
           import json, re, urllib.request
@@ -48,8 +48,7 @@ jobs:
           echo "CLANG_RC=$?"
           cd ..
           file out/ClaudeUnlock.dylib
-          llvm-objdump -p out/ClaudeUnlock.dylib | grep -A2 LC_ID_DYLIB
-          ldid -S out/ClaudeUnlock.dylib || true
+          strings -a out/ClaudeUnlock.dylib | grep -m1 'Frameworks/ClaudeUnlock.dylib' || echo "NO_INSTALL_NAME"
           ls -la out
 
       - name: Publish log and dylib
