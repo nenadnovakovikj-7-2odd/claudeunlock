@@ -8,16 +8,27 @@ permissions:
 
 jobs:
   dylib:
-    runs-on: macos-latest
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: |
+          ls /Applications | grep -i xcode || true
+          if [ -d /Applications/Xcode.app ]; then
+            sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+          fi
+          xcode-select -p || true
+          xcodebuild -version || true
+          xcodebuild -showsdks || true
+          xcrun --sdk iphoneos --show-sdk-path || echo "NO_IPHONEOS_SDK"
 
       - name: Compile
         run: |
           set -euo pipefail
           mkdir -p out
           SDK=$(xcrun --sdk iphoneos --show-sdk-path)
-          echo "SDK: $SDK"
+          echo "Using SDK: $SDK"
           xcrun -sdk iphoneos clang -arch arm64 -dynamiclib -fobjc-arc \
             -fvisibility=hidden -DCU_DEBUG=1 \
             -miphoneos-version-min=16.0 -isysroot "$SDK" \
