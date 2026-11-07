@@ -10,17 +10,19 @@ jobs:
   dylib:
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v4
+      - name: Get sources
+        run: |
+          set -euo pipefail
+          git clone --depth 1 \
+            "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" src
+          ls -la src
 
       - name: Select Xcode
         run: |
-          ls /Applications | grep -i xcode || true
           if [ -d /Applications/Xcode.app ]; then
             sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
           fi
           xcode-select -p || true
-          xcodebuild -version || true
-          xcodebuild -showsdks || true
           xcrun --sdk iphoneos --show-sdk-path || echo "NO_IPHONEOS_SDK"
 
       - name: Compile
@@ -29,12 +31,13 @@ jobs:
           mkdir -p out
           SDK=$(xcrun --sdk iphoneos --show-sdk-path)
           echo "Using SDK: $SDK"
+          cd src
           xcrun -sdk iphoneos clang -arch arm64 -dynamiclib -fobjc-arc \
             -fvisibility=hidden -DCU_DEBUG=1 \
             -miphoneos-version-min=16.0 -isysroot "$SDK" \
             -framework Foundation \
             -install_name @executable_path/Frameworks/ClaudeUnlock.dylib \
-            -o out/ClaudeUnlock.dylib \
+            -o ../out/ClaudeUnlock.dylib \
             ClaudeUnlock.mm CUURLProtocol.mm CUPatch.mm
 
       - name: Sign and verify
@@ -43,18 +46,12 @@ jobs:
           codesign -f -s - out/ClaudeUnlock.dylib
           lipo -info out/ClaudeUnlock.dylib
           otool -D out/ClaudeUnlock.dylib
-          ls -la out
 
       - name: Publish download
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "build-${{ github.run_number }}" \
-            out/ClaudeUnlock.dylib \
-            --title "build ${{ github.run_number }}" \
-            --notes "ClaudeUnlock.dylib - arm64, inject into com.anthropic.claude"
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: ClaudeUnlock-dylib
-          path: out/ClaudeUnlock.dylib
+          set -euo pipefail
+          TAG="build-${{ github.run_number }}"
+          gh release create "$TAG" --title "$TAG" --notes "arm64 dylib" || true
+          gh release upload "$TAG" out/ClaudeUnlock.dylib --clobber
