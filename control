@@ -1,0 +1,8 @@
+Package: com.venice.claudeunlock
+Name: ClaudeUnlock
+Version: 1.0.0
+Architecture: iphoneos-arm64
+Description: Local entitlement and limit patch for Claude iOS
+Maintainer: Venice
+Author: Venice
+Section: Tweaks
