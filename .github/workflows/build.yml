@@ -12,21 +12,26 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Theos
+      - name: Compile
         run: |
-          brew install ldid xz
-          git clone --recursive https://github.com/theos/theos.git "$HOME/theos"
-          echo "THEOS=$HOME/theos" >> $GITHUB_ENV
-
-      - name: Build
-        run: make
-
-      - name: Collect and verify
-        run: |
+          set -euo pipefail
           mkdir -p out
-          find .theos -name 'ClaudeUnlock.dylib' -exec cp {} out/ \;
-          test -f out/ClaudeUnlock.dylib
+          SDK=$(xcrun --sdk iphoneos --show-sdk-path)
+          echo "SDK: $SDK"
+          xcrun -sdk iphoneos clang -arch arm64 -dynamiclib -fobjc-arc \
+            -fvisibility=hidden -DCU_DEBUG=1 \
+            -miphoneos-version-min=16.0 -isysroot "$SDK" \
+            -framework Foundation \
+            -install_name @executable_path/Frameworks/ClaudeUnlock.dylib \
+            -o out/ClaudeUnlock.dylib \
+            ClaudeUnlock.mm CUURLProtocol.mm CUPatch.mm
+
+      - name: Sign and verify
+        run: |
+          set -euo pipefail
+          codesign -f -s - out/ClaudeUnlock.dylib
           lipo -info out/ClaudeUnlock.dylib
+          otool -D out/ClaudeUnlock.dylib
           ls -la out
 
       - name: Publish download
