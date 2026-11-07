@@ -10,27 +10,20 @@ jobs:
   dylib:
     runs-on: macos-15
     steps:
-      - name: Get sources
+      - name: Build verbose
         run: |
-          set -euo pipefail
-          git clone --depth 1 \
-            "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" src
+          exec > >(tee build.log) 2>&1
+          set -x
+          sw_vers
+          xcode-select -p
+          xcrun --sdk iphoneos --show-sdk-path
+          echo "SDK_RC=$?"
+          git clone --depth 1 "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" src
+          echo "CLONE_RC=$?"
           ls -la src
-
-      - name: Select Xcode
-        run: |
-          if [ -d /Applications/Xcode.app ]; then
-            sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
-          fi
-          xcode-select -p || true
-          xcrun --sdk iphoneos --show-sdk-path || echo "NO_IPHONEOS_SDK"
-
-      - name: Compile
-        run: |
-          set -euo pipefail
           mkdir -p out
           SDK=$(xcrun --sdk iphoneos --show-sdk-path)
-          echo "Using SDK: $SDK"
+          echo "USING_SDK=$SDK"
           cd src
           xcrun -sdk iphoneos clang -arch arm64 -dynamiclib -fobjc-arc \
             -fvisibility=hidden -DCU_DEBUG=1 \
@@ -39,19 +32,21 @@ jobs:
             -install_name @executable_path/Frameworks/ClaudeUnlock.dylib \
             -o ../out/ClaudeUnlock.dylib \
             ClaudeUnlock.mm CUURLProtocol.mm CUPatch.mm
-
-      - name: Sign and verify
-        run: |
-          set -euo pipefail
-          codesign -f -s - out/ClaudeUnlock.dylib
+          echo "CLANG_RC=$?"
+          cd ..
           lipo -info out/ClaudeUnlock.dylib
           otool -D out/ClaudeUnlock.dylib
+          ls -la out
 
-      - name: Publish download
+      - name: Publish log and dylib
+        if: always()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          set -euo pipefail
-          TAG="build-${{ github.run_number }}"
-          gh release create "$TAG" --title "$TAG" --notes "arm64 dylib" || true
-          gh release upload "$TAG" out/ClaudeUnlock.dylib --clobber
+          TAG="run-${{ github.run_number }}"
+          gh release create "$TAG" --title "$TAG" --notes "build log" || true
+          gh release upload "$TAG" build.log --clobber || true
+          if [ -f out/ClaudeUnlock.dylib ]; then
+            gh release upload "$TAG" out/ClaudeUnlock.dylib --clobber || true
+          fi
+          tail -n 40 build.log || true
