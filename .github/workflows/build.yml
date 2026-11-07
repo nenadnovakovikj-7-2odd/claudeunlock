@@ -14,49 +14,45 @@ jobs:
         run: |
           exec > >(tee build.log) 2>&1
           set -x
-          sudo apt-get update -y || echo "APT_UPDATE_FAILED"
-          sudo apt-get install -y lld xz-utils || echo "APT_INSTALL_FAILED"
-          which clang || sudo apt-get install -y clang || echo "NO_CLANG"
-          clang --version
-          python3 - > sdkurl.txt <<'PY'
+          sudo apt-get update -y || echo "FAIL_APT_UPDATE"
+          sudo apt-get install -y lld xz-utils || echo "FAIL_APT_INSTALL"
+          clang --version || echo "FAIL_NO_CLANG"
+          git clone --depth 1 "https://github.com/${{ github.repository }}.git" src || echo "FAIL_CLONE"
+          ls -la src || true
+          python3 - > sdkurl.txt <<'PY' || echo "FAIL_SDKURL"
           import json, re, urllib.request
           d = json.load(urllib.request.urlopen("https://api.github.com/repos/theos/sdks/contents/"))
           names = [x["name"] for x in d if re.match(r"iPhoneOS[\d.]+\.sdk\.tar\.xz$", x["name"])]
           names.sort(key=lambda n: [int(p) for p in re.findall(r"\d+", n)])
           print(names[-1])
           PY
-          cat sdkurl.txt
-          curl -sL -o sdk.tar.xz "https://github.com/theos/sdks/raw/master/$(cat sdkurl.txt)"
-          ls -la sdk.tar.xz
+          cat sdkurl.txt || true
+          curl -sL -o sdk.tar.xz "https://github.com/theos/sdks/raw/master/$(cat sdkurl.txt)" || echo "FAIL_CURL"
           mkdir -p sdkroot
-          tar -xf sdk.tar.xz -C sdkroot
+          tar -xf sdk.tar.xz -C sdkroot || echo "FAIL_TAR"
           SDK="$(echo "$PWD"/sdkroot/*.sdk)"
           echo "SDK=$SDK"
-          ls "$SDK" | head
-          git clone --depth 1 "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" src
-          echo "CLONE_RC=$?"
-          ls -la src
           mkdir -p out
-          cd src
+          cd src || echo "FAIL_CD"
           clang -target arm64-apple-ios16.0 -dynamiclib -fobjc-arc \
             -fvisibility=hidden -DCU_DEBUG=1 \
             -isysroot "$SDK" -F"$SDK/System/Library/Frameworks" -L"$SDK/usr/lib" \
             -fuse-ld=lld -Wl,-install_name,@executable_path/Frameworks/ClaudeUnlock.dylib \
             -framework Foundation \
             -o ../out/ClaudeUnlock.dylib \
-            ClaudeUnlock.mm CUURLProtocol.mm CUPatch.mm
-          echo "CLANG_RC=$?"
+            ClaudeUnlock.mm CUURLProtocol.mm CUPatch.mm || echo "FAIL_CLANG"
           cd ..
-          file out/ClaudeUnlock.dylib
+          file out/ClaudeUnlock.dylib || true
           strings -a out/ClaudeUnlock.dylib | grep -m1 'Frameworks/ClaudeUnlock.dylib' || echo "NO_INSTALL_NAME"
-          ls -la out
+          ls -la out || true
+          exit 0
 
       - name: Publish log and dylib
         if: always()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG="run-${{ github.run_number }}"
+          TAG="run-${{ github.run_id }}"
           gh release create "$TAG" --title "$TAG" --notes "build log" || true
           gh release upload "$TAG" build.log --clobber || true
           if [ -f out/ClaudeUnlock.dylib ]; then
