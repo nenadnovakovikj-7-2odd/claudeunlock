@@ -8,34 +8,48 @@ permissions:
 
 jobs:
   dylib:
-    runs-on: macos-15
+    runs-on: ubuntu-latest
     steps:
       - name: Build verbose
         run: |
           exec > >(tee build.log) 2>&1
           set -x
-          sw_vers
-          xcode-select -p
-          xcrun --sdk iphoneos --show-sdk-path
-          echo "SDK_RC=$?"
+          uname -a
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq clang lld ldid curl python3 xz-utils git
+          clang --version
+          python3 - > sdkurl.txt <<'PY'
+          import json, re, urllib.request
+          d = json.load(urllib.request.urlopen("https://api.github.com/repos/theos/sdks/contents/"))
+          names = [x["name"] for x in d if re.match(r"iPhoneOS[\d.]+\.sdk\.tar\.xz$", x["name"])]
+          names.sort(key=lambda n: [int(p) for p in re.findall(r"\d+", n)])
+          print(names[-1])
+          PY
+          cat sdkurl.txt
+          curl -sL -o sdk.tar.xz "https://github.com/theos/sdks/raw/master/$(cat sdkurl.txt)"
+          ls -la sdk.tar.xz
+          mkdir -p sdkroot
+          tar -xf sdk.tar.xz -C sdkroot
+          SDK="$(echo "$PWD"/sdkroot/*.sdk)"
+          echo "SDK=$SDK"
+          ls "$SDK" | head
           git clone --depth 1 "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" src
           echo "CLONE_RC=$?"
           ls -la src
           mkdir -p out
-          SDK=$(xcrun --sdk iphoneos --show-sdk-path)
-          echo "USING_SDK=$SDK"
           cd src
-          xcrun -sdk iphoneos clang -arch arm64 -dynamiclib -fobjc-arc \
+          clang -target arm64-apple-ios16.0 -dynamiclib -fobjc-arc \
             -fvisibility=hidden -DCU_DEBUG=1 \
-            -miphoneos-version-min=16.0 -isysroot "$SDK" \
+            -isysroot "$SDK" -F"$SDK/System/Library/Frameworks" -L"$SDK/usr/lib" \
+            -fuse-ld=lld -Wl,-install_name,@executable_path/Frameworks/ClaudeUnlock.dylib \
             -framework Foundation \
-            -install_name @executable_path/Frameworks/ClaudeUnlock.dylib \
             -o ../out/ClaudeUnlock.dylib \
             ClaudeUnlock.mm CUURLProtocol.mm CUPatch.mm
           echo "CLANG_RC=$?"
           cd ..
-          lipo -info out/ClaudeUnlock.dylib
-          otool -D out/ClaudeUnlock.dylib
+          file out/ClaudeUnlock.dylib
+          llvm-objdump -p out/ClaudeUnlock.dylib | grep -A2 LC_ID_DYLIB
+          ldid -S out/ClaudeUnlock.dylib || true
           ls -la out
 
       - name: Publish log and dylib
