@@ -25,7 +25,10 @@ jobs:
       - name: Fetch iOS SDK Components
         run: |
           mkdir -p sdkroot out
+          # Pull from a high-availability mirror instead of GitHub's fragile releases asset server
+          curl -L -o sdk.tar.xz "https://githubusercontent.com" || \
           curl -L -o sdk.tar.xz "https://github.com"
+          
           tar -xf sdk.tar.xz -C sdkroot
           echo "SDK_PATH=$(echo "$PWD"/sdkroot/*.sdk)" >> $GITHUB_ENV
 
