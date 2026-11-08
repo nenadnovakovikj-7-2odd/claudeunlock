@@ -1,4 +1,5 @@
 name: release
+
 on:
   workflow_dispatch:
 
@@ -9,30 +10,21 @@ jobs:
   make:
     runs-on: ubuntu-latest
     steps:
-      # 1. Properly pull down your repository code
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2. Build the dylib using the local checked-out files
       - name: Compile Tweak
         run: |
           set -e
           set -x
-          
-          # Install dependencies
           sudo apt-get update -y
           sudo apt-get install -y lld xz-utils
-          
-          # Fetch and extract iOS SDK
           SDKNAME=$(curl -s https://github.com | grep -o 'iPhoneOS[0-9.]*\.sdk\.tar\.xz' | sort -V | tail -1)
           echo "Using SDK: $SDKNAME"
           curl -sL -o sdk.tar.xz "https://github.com"
-          
           mkdir -p sdkroot out
           tar -xf sdk.tar.xz -C sdkroot
           SDK="$(echo "$PWD"/sdkroot/*.sdk)"
-          
-          # Compile the dylib (using local source files now)
           clang -target arm64-apple-ios16.0 -dynamiclib -fobjc-arc \
             -fvisibility=hidden -DCU_DEBUG=1 \
             -isysroot "$SDK" -F"$SDK/System/Library/Frameworks" -L"$SDK/usr/lib" \
@@ -41,7 +33,6 @@ jobs:
             -o out/ClaudeUnlock.dylib \
             ClaudeUnlock.mm CUURLProtocol.mm CUPatch.mm
 
-      # 3. Create the Release and upload the file natively
       - name: Publish Release to GitHub
         uses: softprops/action-gh-release@v2
         with:
