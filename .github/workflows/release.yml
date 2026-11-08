@@ -24,9 +24,9 @@ jobs:
 
       - name: Fetch iOS SDK
         run: |
-          SDKNAME=$(curl -s https://github.com | grep -o 'iPhoneOS[0-9.]*\.sdk\.tar\.xz' | sort -V | tail -1)
-          curl -sL -o sdk.tar.xz "https://github.com"
           mkdir -p sdkroot out
+          # Download using a 100% stable static direct link to prevent API rate-limiting crashes
+          curl -sL -o sdk.tar.xz "https://github.com"
           tar -xf sdk.tar.xz -C sdkroot
           echo "SDK_PATH=$(echo "$PWD"/sdkroot/*.sdk)" >> $GITHUB_ENV
 
@@ -43,7 +43,7 @@ jobs:
             ClaudeUnlock.mm CUURLProtocol.mm CUPatch.mm
 
       - name: Upload Binary Package to Releases
-        uses: softprops/action-gh-release@v3
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ github.run_number }}
           name: Build v${{ github.run_number }}
