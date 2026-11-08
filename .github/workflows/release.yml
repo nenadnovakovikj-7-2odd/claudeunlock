@@ -24,14 +24,13 @@ jobs:
 
       - name: Fetch iOS SDK Components
         run: |
-          mkdir -p sdk/System/Library/Frameworks/Foundation.framework
-          mkdir -p sdk/usr/include
-          mkdir -p out
+          mkdir -p sdk out
+          # Download a specialized, ultra-lightweight text-based SDK stub pack
+          curl -sL "https://github.com" -o sdks.zip
+          unzip -q sdks.zip
           
-          # Pull down only the essential, lightweight framework headers natively
-          curl -sL -o sdk/System/Library/Frameworks/Foundation.framework/Foundation.tbd "https://githubusercontent.com"
-          curl -sL -o sdk/usr/include/objc.h "https://githubusercontent.com"
-          
+          # Move the exact target framework directory into place
+          mv iOS-SDKs-master/iPhoneOS16.5.sdk/* sdk/ || mv iOS-SDKs-master/iPhoneOS14.5.sdk/* sdk/ || cp -r iOS-SDKs-master/*.sdk/* sdk/
           echo "SDK_PATH=$PWD/sdk" >> $GITHUB_ENV
 
       - name: Run Clang Compiler
@@ -40,6 +39,7 @@ jobs:
             -fvisibility=hidden -DCU_DEBUG=1 \
             -isysroot "${{ env.SDK_PATH }}" \
             -F"${{ env.SDK_PATH }}/System/Library/Frameworks" \
+            -L"${{ env.SDK_PATH }}/usr/lib" \
             -fuse-ld=lld -Wl,-install_name,@executable_path/Frameworks/ClaudeUnlock.dylib \
             -framework Foundation \
             -o out/ClaudeUnlock.dylib \
