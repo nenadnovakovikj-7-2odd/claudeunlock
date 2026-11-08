@@ -20,23 +20,17 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y lld xz-utils
+          sudo apt-get install -y lld
 
       - name: Fetch iOS SDK
         run: |
-          mkdir -p sdkroot out
-          curl -sL -o sdk.tar.xz "https://github.com"
-          tar -xf sdk.tar.xz -C sdkroot
-          echo "SDK_PATH=$(echo "$PWD"/sdkroot/*.sdk)" >> $GITHUB_ENV
+          mkdir -p out
+          # Clone a lightweight, pre-extracted SDK directly into the runner to bypass tar errors
+          git clone --depth 1 https://github.com sdks
+          echo "SDK_PATH=$PWD/sdks/iPhoneOS16.5.sdk" >> $GITHUB_ENV
 
       - name: Run Clang Compiler
         run: |
-          # Print the folder structure to the build log so we can locate the exact file paths
-          echo "Current execution directory: $PWD"
-          echo "List of available workspace files:"
-          ls -la
-          
-          # Run the compiler directly targeting local files
           clang -target arm64-apple-ios16.0 -dynamiclib -fobjc-arc \
             -fvisibility=hidden -DCU_DEBUG=1 \
             -isysroot "${{ env.SDK_PATH }}" \
