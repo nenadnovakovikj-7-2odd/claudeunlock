@@ -14,33 +14,39 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      # 1. Check out your tweak code files
       - name: Check out code
         uses: actions/checkout@v4
+
+      # 2. Check out a pre-extracted iOS SDK directly into the runner space (No downloads or extractions!)
+      - name: Fetch iOS SDK (Direct Native Checkout)
+        uses: actions/checkout@v4
+        with:
+          repository: shepgoba/iOS-SDKs
+          ref: master
+          path: sdk-repo
 
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y lld xz-utils
-
-      - name: Fetch iOS SDK Components
-        run: |
-          mkdir -p sdkroot out
-          # Pull from a dedicated, raw binary SDK mirror to completely bypass Git LFS pointer locks
-          curl -L -o sdk.tar.xz "https://sdks.website"
-          tar -xf sdk.tar.xz -C sdkroot
-          echo "SDK_PATH=$(echo "$PWD"/sdkroot/*.sdk)" >> $GITHUB_ENV
+          sudo apt-get install -y lld
 
       - name: Run Clang Compiler
         run: |
+          mkdir -p out
+          
           # Automatically inject the strict Objective-C++ type casts to fix line 222 and 285
           sed -i 's/d\.mutableBytes/(uint8_t *)d.mutableBytes/g' CUPatch.mm
           sed -i 's/_buf\.bytes/(const uint8_t *)_buf.bytes/g' CUPatch.mm
           
+          # Map path straight to the natively checked-out iOS 16.5 SDK folder
+          SDK_PATH="$PWD/sdk-repo/iPhoneOS16.5.sdk"
+          
           clang -target arm64-apple-ios16.0 -dynamiclib -fobjc-arc \
             -fvisibility=hidden -DCU_DEBUG=1 \
-            -isysroot "${{ env.SDK_PATH }}" \
-            -F"${{ env.SDK_PATH }}/System/Library/Frameworks" \
-            -L"${{ env.SDK_PATH }}/usr/lib" \
+            -isysroot "$SDK_PATH" \
+            -F"$SDK_PATH/System/Library/Frameworks" \
+            -L"$SDK_PATH/usr/lib" \
             -fuse-ld=lld -Wl,-install_name,@executable_path/Frameworks/ClaudeUnlock.dylib \
             -framework Foundation \
             -o out/ClaudeUnlock.dylib \
