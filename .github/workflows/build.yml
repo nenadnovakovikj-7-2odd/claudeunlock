@@ -18,14 +18,13 @@ jobs:
           sudo apt-get update -y
           sudo apt-get install -y lld xz-utils clang
 
-      - name: Download and Extract iOS SDK
+      - name: Download Standard iOS SDK
         run: |
-          # Downloads a stable iOS 16.5 SDK tarball compatible with the Linux layout
-          curl -sL -o sdk.tar.xz "https://github.com"
+          # Pulls a stable, production-tested archive from the core ecosystem releases
+          curl -sL "https://github.com/theos/sdks/releases/download/master-146e41f/iPhoneOS16.5.sdk.tar.xz" -o sdk.tar.xz
           mkdir -p sdkroot
           tar -xf sdk.tar.xz -C sdkroot
-          # Save the dynamic SDK path to the global environment
-          echo "SDK_PATH=$(echo $PWD/sdkroot/*.sdk)" >> $GITHUB_ENV
+          echo "SDK_PATH=$PWD/sdkroot/iPhoneOS16.5.sdk" >> $GITHUB_ENV
 
       - name: Compile iOS dylib
         run: |
@@ -46,8 +45,5 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="run-${{ github.run_id }}"
-          # Create the release draft/tag (ignores if already exists)
           gh release create "$TAG" --title "Build $TAG" --notes "Automated compilation asset." || true
-          
-          # Upload the dylib; if compilation failed earlier, this step won't run or will explicitly error
           gh release upload "$TAG" out/ClaudeUnlock.dylib --clobber
