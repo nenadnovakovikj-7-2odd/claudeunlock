@@ -8,54 +8,32 @@ permissions:
 
 jobs:
   dylib:
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     steps:
-      - name: Build verbose
+      - name: Checkout Source
+        uses: actions/checkout@v4
+
+      - name: Compile dylib Natively
         run: |
-          exec > >(tee build.log) 2>&1
-          set -x
-          sudo apt-get update -y || echo "FAIL_APT_UPDATE"
-          sudo apt-get install -y lld xz-utils || echo "FAIL_APT_INSTALL"
-          clang --version || echo "FAIL_NO_CLANG"
-          git clone --depth 1 "https://github.com/${{ github.repository }}.git" src || echo "FAIL_CLONE"
-          ls -la src || true
-          python3 - > sdkurl.txt <<'PY' || echo "FAIL_SDKURL"
-          import json, re, urllib.request
-          d = json.load(urllib.request.urlopen("https://api.github.com/repos/theos/sdks/contents/"))
-          names = [x["name"] for x in d if re.match(r"iPhoneOS[\d.]+\.sdk\.tar\.xz$", x["name"])]
-          names.sort(key=lambda n: [int(p) for p in re.findall(r"\d+", n)])
-          print(names[-1])
-          PY
-          cat sdkurl.txt || true
-          curl -sL -o sdk.tar.xz "https://github.com/theos/sdks/raw/master/$(cat sdkurl.txt)" || echo "FAIL_CURL"
-          mkdir -p sdkroot
-          tar -xf sdk.tar.xz -C sdkroot || echo "FAIL_TAR"
-          SDK="$(echo "$PWD"/sdkroot/*.sdk)"
-          echo "SDK=$SDK"
           mkdir -p out
-          cd src || echo "FAIL_CD"
+          # Dynamically locate the native Xcode iOS SDK path
+          SDK_PATH=$(xcrun --sdk iphoneos --show-sdk-path)
+          
           clang -target arm64-apple-ios16.0 -dynamiclib -fobjc-arc \
             -fvisibility=hidden -DCU_DEBUG=1 \
-            -isysroot "$SDK" -F"$SDK/System/Library/Frameworks" -L"$SDK/usr/lib" \
-            -fuse-ld=lld -Wl,-install_name,@executable_path/Frameworks/ClaudeUnlock.dylib \
+            -isysroot "$SDK_PATH" \
+            -Wl,-install_name,@executable_path/Frameworks/ClaudeUnlock.dylib \
             -framework Foundation \
-            -o ../out/ClaudeUnlock.dylib \
-            ClaudeUnlock.mm CUURLProtocol.mm CUPatch.mm || echo "FAIL_CLANG"
-          cd ..
-          file out/ClaudeUnlock.dylib || true
-          strings -a out/ClaudeUnlock.dylib | grep -m1 'Frameworks/ClaudeUnlock.dylib' || echo "NO_INSTALL_NAME"
-          ls -la out || true
-          exit 0
+            -o out/ClaudeUnlock.dylib \
+            ClaudeUnlock.mm CUURLProtocol.mm CUPatch.mm
 
-      - name: Publish log and dylib
+      - name: Publish Release Assets
         if: always()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="run-${{ github.run_id }}"
-          gh release create "$TAG" --title "$TAG" --notes "build log" || true
-          gh release upload "$TAG" build.log --clobber || true
+          gh release create "$TAG" --title "$TAG" --notes "Automated Build" || true
           if [ -f out/ClaudeUnlock.dylib ]; then
-            gh release upload "$TAG" out/ClaudeUnlock.dylib --clobber || true
+            gh release upload "$TAG" out/ClaudeUnlock.dylib --clobber
           fi
-          tail -n 40 build.log || true
