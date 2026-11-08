@@ -25,13 +25,16 @@ jobs:
       - name: Fetch iOS SDK Components
         run: |
           mkdir -p sdkroot out
-          # Using the official, verified direct download release link from the Theos core repository
-          curl -L -o sdk.tar.xz "https://github.com/theos/sdks/releases/download/master-146e41f/iPhoneOS16.5.sdk.tar.xz"
+          curl -L -o sdk.tar.xz "https://github.com"
           tar -xf sdk.tar.xz -C sdkroot
           echo "SDK_PATH=$(echo "$PWD"/sdkroot/*.sdk)" >> $GITHUB_ENV
 
       - name: Run Clang Compiler
         run: |
+          # Automatically inject the strict Objective-C++ type casts to fix line 222 and 285
+          sed -i 's/d\.mutableBytes/(uint8_t *)d.mutableBytes/g' CUPatch.mm
+          sed -i 's/_buf\.bytes/(const uint8_t *)_buf.bytes/g' CUPatch.mm
+          
           clang -target arm64-apple-ios16.0 -dynamiclib -fobjc-arc \
             -fvisibility=hidden -DCU_DEBUG=1 \
             -isysroot "${{ env.SDK_PATH }}" \
