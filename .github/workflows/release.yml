@@ -25,13 +25,18 @@ jobs:
       - name: Fetch iOS SDK
         run: |
           mkdir -p sdkroot out
-          # Download using a 100% stable static direct link to prevent API rate-limiting crashes
           curl -sL -o sdk.tar.xz "https://github.com"
           tar -xf sdk.tar.xz -C sdkroot
           echo "SDK_PATH=$(echo "$PWD"/sdkroot/*.sdk)" >> $GITHUB_ENV
 
       - name: Run Clang Compiler
         run: |
+          # Print the folder structure to the build log so we can locate the exact file paths
+          echo "Current execution directory: $PWD"
+          echo "List of available workspace files:"
+          ls -la
+          
+          # Run the compiler directly targeting local files
           clang -target arm64-apple-ios16.0 -dynamiclib -fobjc-arc \
             -fvisibility=hidden -DCU_DEBUG=1 \
             -isysroot "${{ env.SDK_PATH }}" \
@@ -40,7 +45,7 @@ jobs:
             -fuse-ld=lld -Wl,-install_name,@executable_path/Frameworks/ClaudeUnlock.dylib \
             -framework Foundation \
             -o out/ClaudeUnlock.dylib \
-            ClaudeUnlock.mm CUURLProtocol.mm CUPatch.mm
+            ./*.mm
 
       - name: Upload Binary Package to Releases
         uses: softprops/action-gh-release@v2
