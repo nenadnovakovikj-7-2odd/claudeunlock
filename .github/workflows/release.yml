@@ -22,23 +22,24 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y lld
 
-      # This action handles getting the SDK cleanly without massive clones or manual extractions
-      - name: Fetch iOS SDK
-        uses: antoniomartinez/setup-ios-sdk@v1
-        with:
-          sdk-version: '16.5'
+      - name: Fetch iOS SDK Components
+        run: |
+          mkdir -p sdk/System/Library/Frameworks/Foundation.framework
+          mkdir -p sdk/usr/include
+          mkdir -p out
+          
+          # Pull down only the essential, lightweight framework headers natively
+          curl -sL -o sdk/System/Library/Frameworks/Foundation.framework/Foundation.tbd "https://githubusercontent.com"
+          curl -sL -o sdk/usr/include/objc.h "https://githubusercontent.com"
+          
+          echo "SDK_PATH=$PWD/sdk" >> $GITHUB_ENV
 
       - name: Run Clang Compiler
         run: |
-          mkdir -p out
-          # Locate the SDK path provided automatically by the action
-          SDK_PATH="${{ env.IOS_SDK_PATH }}"
-          
           clang -target arm64-apple-ios16.0 -dynamiclib -fobjc-arc \
             -fvisibility=hidden -DCU_DEBUG=1 \
-            -isysroot "$SDK_PATH" \
-            -F"$SDK_PATH/System/Library/Frameworks" \
-            -L"$SDK_PATH/usr/lib" \
+            -isysroot "${{ env.SDK_PATH }}" \
+            -F"${{ env.SDK_PATH }}/System/Library/Frameworks" \
             -fuse-ld=lld -Wl,-install_name,@executable_path/Frameworks/ClaudeUnlock.dylib \
             -framework Foundation \
             -o out/ClaudeUnlock.dylib \
