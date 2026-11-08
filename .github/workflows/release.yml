@@ -20,18 +20,15 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y lld
+          sudo apt-get install -y lld xz-utils
 
       - name: Fetch iOS SDK Components
         run: |
-          mkdir -p sdk out
-          # Download a specialized, ultra-lightweight text-based SDK stub pack
-          curl -sL "https://github.com" -o sdks.zip
-          unzip -q sdks.zip
-          
-          # Move the exact target framework directory into place
-          mv iOS-SDKs-master/iPhoneOS16.5.sdk/* sdk/ || mv iOS-SDKs-master/iPhoneOS14.5.sdk/* sdk/ || cp -r iOS-SDKs-master/*.sdk/* sdk/
-          echo "SDK_PATH=$PWD/sdk" >> $GITHUB_ENV
+          mkdir -p sdkroot out
+          # Using the official, verified direct download release link from the Theos core repository
+          curl -L -o sdk.tar.xz "https://github.com/theos/sdks/releases/download/master-146e41f/iPhoneOS16.5.sdk.tar.xz"
+          tar -xf sdk.tar.xz -C sdkroot
+          echo "SDK_PATH=$(echo "$PWD"/sdkroot/*.sdk)" >> $GITHUB_ENV
 
       - name: Run Clang Compiler
         run: |
