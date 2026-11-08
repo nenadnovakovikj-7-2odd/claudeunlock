@@ -1,0 +1,46 @@
+name: release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  make:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Compile Tweak
+        run: |
+          set -e
+          set -x
+          sudo apt-get update -y
+          sudo apt-get install -y lld xz-utils
+          SDKNAME=$(curl -s https://github.com | grep -o 'iPhoneOS[0-9.]*\.sdk\.tar\.xz' | sort -V | tail -1)
+          echo "Using SDK: $SDKNAME"
+          curl -sL -o sdk.tar.xz "https://github.com"
+          mkdir -p sdkroot out
+          tar -xf sdk.tar.xz -C sdkroot
+          SDK="$(echo "$PWD"/sdkroot/*.sdk)"
+          clang -target arm64-apple-ios16.0 -dynamiclib -fobjc-arc \
+            -fvisibility=hidden -DCU_DEBUG=1 \
+            -isysroot "$SDK" -F"$SDK/System/Library/Frameworks" -L"$SDK/usr/lib" \
+            -fuse-ld=lld -Wl,-install_name,@executable_path/Frameworks/ClaudeUnlock.dylib \
+            -framework Foundation \
+            -o out/ClaudeUnlock.dylib \
+            ClaudeUnlock.mm CUURLProtocol.mm CUPatch.mm
+
+      - name: Publish Release to GitHub
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ github.run_number }}
+          name: Release v${{ github.run_number }}
+          body: "ClaudeUnlock manual build"
+          draft: false
+          prerelease: false
+          files: out/ClaudeUnlock.dylib
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
