@@ -1,18 +1,17 @@
-name: compiler-pipeline
+name: release
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
       - master
-  release:
-    types: [published]
 
 permissions:
   contents: write
 
 jobs:
-  compile-and-publish:
+  build:
     runs-on: ubuntu-latest
     steps:
       - name: Check out code
@@ -44,8 +43,7 @@ jobs:
             ClaudeUnlock.mm CUURLProtocol.mm CUPatch.mm
 
       - name: Upload Binary Package to Releases
-        uses: softprops/action-gh-release@v2
-        if: github.event_name == 'release' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: v${{ github.run_number }}
           name: Build v${{ github.run_number }}
