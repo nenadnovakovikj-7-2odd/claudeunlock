@@ -1,46 +1,54 @@
-name: release
+name: compiler-pipeline
 
 on:
-  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+  release:
+    types: [published]
 
 permissions:
   contents: write
 
 jobs:
-  make:
+  compile-and-publish:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
+      - name: Check out code
         uses: actions/checkout@v4
 
-      - name: Compile Tweak
+      - name: Install dependencies
         run: |
-          set -e
-          set -x
-          sudo apt-get update -y
+          sudo apt-get update
           sudo apt-get install -y lld xz-utils
+
+      - name: Fetch iOS SDK
+        run: |
           SDKNAME=$(curl -s https://github.com | grep -o 'iPhoneOS[0-9.]*\.sdk\.tar\.xz' | sort -V | tail -1)
-          echo "Using SDK: $SDKNAME"
           curl -sL -o sdk.tar.xz "https://github.com"
           mkdir -p sdkroot out
           tar -xf sdk.tar.xz -C sdkroot
-          SDK="$(echo "$PWD"/sdkroot/*.sdk)"
+          echo "SDK_PATH=$(echo "$PWD"/sdkroot/*.sdk)" >> $GITHUB_ENV
+
+      - name: Run Clang Compiler
+        run: |
           clang -target arm64-apple-ios16.0 -dynamiclib -fobjc-arc \
             -fvisibility=hidden -DCU_DEBUG=1 \
-            -isysroot "$SDK" -F"$SDK/System/Library/Frameworks" -L"$SDK/usr/lib" \
+            -isysroot "${{ env.SDK_PATH }}" \
+            -F"${{ env.SDK_PATH }}/System/Library/Frameworks" \
+            -L"${{ env.SDK_PATH }}/usr/lib" \
             -fuse-ld=lld -Wl,-install_name,@executable_path/Frameworks/ClaudeUnlock.dylib \
             -framework Foundation \
             -o out/ClaudeUnlock.dylib \
             ClaudeUnlock.mm CUURLProtocol.mm CUPatch.mm
 
-      - name: Publish Release to GitHub
+      - name: Upload Binary Package to Releases
         uses: softprops/action-gh-release@v2
+        if: github.event_name == 'release' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
         with:
           tag_name: v${{ github.run_number }}
-          name: Release v${{ github.run_number }}
-          body: "ClaudeUnlock manual build"
-          draft: false
-          prerelease: false
+          name: Build v${{ github.run_number }}
           files: out/ClaudeUnlock.dylib
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
