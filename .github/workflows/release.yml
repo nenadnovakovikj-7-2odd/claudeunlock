@@ -14,17 +14,13 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      # 1. Check out your tweak code files
+      # 1. Pull down your tweak code files
       - name: Check out code
         uses: actions/checkout@v4
 
-      # 2. Check out a pre-extracted iOS SDK directly into the runner space (No downloads or extractions!)
-      - name: Fetch iOS SDK (Direct Native Checkout)
-        uses: actions/checkout@v4
-        with:
-          repository: shepgoba/iOS-SDKs
-          ref: master
-          path: sdk-repo
+      # 2. Use the official Theos runner tool to set up the perfect iOS environment natively
+      - name: Setup iOS SDK Environment
+        uses: theos/setup-theos@v1
 
       - name: Install dependencies
         run: |
@@ -39,10 +35,10 @@ jobs:
           sed -i 's/d\.mutableBytes/(uint8_t *)d.mutableBytes/g' CUPatch.mm
           sed -i 's/_buf\.bytes/(const uint8_t *)_buf.bytes/g' CUPatch.mm
           
-          # Map path straight to the natively checked-out iOS 16.5 SDK folder
-          SDK_PATH="$PWD/sdk-repo/iPhoneOS16.5.sdk"
+          # Use the verified, official SDK path automatically provided by the setup-theos tool
+          SDK_PATH="${{ env.THEOS }}/sdks/iPhoneOS.sdk"
           
-          clang -target arm64-apple-ios16.0 -dynamiclib -fobjc-arc \
+          clang -target arm64-apple-ios14.0 -dynamiclib -fobjc-arc \
             -fvisibility=hidden -DCU_DEBUG=1 \
             -isysroot "$SDK_PATH" \
             -F"$SDK_PATH/System/Library/Frameworks" \
